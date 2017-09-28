@@ -5,7 +5,7 @@
 
 import threading
 import SocketServer
-import mysql_utils
+#import mysql_utils
 import config
 import time
 import data_tool
