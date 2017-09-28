@@ -8,7 +8,7 @@ import SocketServer
 #import mysql_utils
 import config
 import time
-import data_tool
+#import data_tool
 
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
@@ -25,7 +25,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 break
             else:
                 print time.ctime(), self.client_address, 'client: ', data
-                analysis = data_tool.Analysis(data)
+                '''analysis = data_tool.Analysis(data)
                 # 检查数据格式是否正确, 如果不正确则直接抛弃
                 if not analysis.check():
                     continue
@@ -38,7 +38,8 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                         result = analysis.location_packets()
                     elif analysis.type == 'B2G':
                         result = analysis.agps_packets()
-            self.request.sendall('%s' % result)
+            self.request.sendall('%s' % result)'''
+
 
 
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
