@@ -9,6 +9,7 @@ import SocketServer
 import config
 import time
 #import data_tool
+import binascii
 
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
@@ -24,7 +25,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print time.ctime(), self.client_address, '(server)client quit'
                 break
             else:
-                print time.ctime(), self.client_address, 'client: ', data
+                print time.ctime(), self.client_address, 'client: ', binascii.b2a_hex(data)
                 '''analysis = data_tool.Analysis(data)
                 # 检查数据格式是否正确, 如果不正确则直接抛弃
                 if not analysis.check():
