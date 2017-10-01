@@ -10,7 +10,7 @@ import config
 import time
 #import data_tool
 import binascii
-
+import data_parse
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     """
@@ -25,21 +25,29 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 print time.ctime(), self.client_address, '(server)client quit'
                 break
             else:
-                print time.ctime(), self.client_address, 'client: ', binascii.b2a_hex(data)
-                '''analysis = data_tool.Analysis(data)
-                # 检查数据格式是否正确, 如果不正确则直接抛弃
-                if not analysis.check():
-                    continue
-                # 修改时间间隔
-                result = analysis.change_time()
-                if result is None:
-                    if analysis.type == 'SYNC':
-                        result = analysis.heartbeat_packets()
-                    elif analysis.type == 'LOCA':
-                        result = analysis.location_packets()
-                    elif analysis.type == 'B2G':
-                        result = analysis.agps_packets()
-            self.request.sendall('%s' % result)'''
+                if 'x'==data[0]:
+                    print time.ctime(), self.client_address, 'client: ', binascii.b2a_hex(data)
+                    dataArray = bytearray(data)
+                    dataParser = data_parse.dataParser(dataArray)
+                    result = dataParser.parserProcess()
+                    print result
+                    self.request.sendall('%s' % result)
+                else:
+                    print time.ctime(), self.client_address, 'client: ', data
+                    '''analysis = data_tool.Analysis(data)
+                    # 检查数据格式是否正确, 如果不正确则直接抛弃
+                    if not analysis.check():
+                        continue
+                    # 修改时间间隔
+                    result = analysis.change_time()
+                    if result is None:
+                        if analysis.type == 'SYNC':
+                            result = analysis.heartbeat_packets()
+                        elif analysis.type == 'LOCA':
+                            result = analysis.location_packets()
+                        elif analysis.type == 'B2G':
+                            result = analysis.agps_packets()
+                    self.request.sendall('%s' % result)'''
 
 
 
