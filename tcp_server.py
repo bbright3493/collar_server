@@ -12,6 +12,8 @@ import time
 import binascii
 import data_parse
 
+
+
 lastip = 0
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
