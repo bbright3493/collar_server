@@ -65,6 +65,9 @@ class   dataParser(object):
         self.login_data_len = self.sourceDate[2]
         for i in range(self.login_data_len - 4):
             self.login_data += str(self.sourceDate[i + 4])
+        #todo：判断ip地址是否发生变化 变化则重新存储ip
+        #todo：存储imei和ip
+        #todo：组装成返回的数据
         return self.login_data
 
     def processHeartCmd(self):
@@ -78,7 +81,11 @@ class   dataParser(object):
         temp2 = ''
         for i in range(4, 9+1):
             timedata += str(hex(self.sourceDate[i]))
-        self.timedata = '0x780x780x060x10' + timedata + '0x0d0x0a'
+
+        #todo：存储时间数据
+        #组装成返回的字段
+        self.timedata = '0x780x780x06x10' + timedata + '0x0d0x0a'
+
 
         for i in range(11, 14 + 1):
             temp1 = str(hex(self.sourceDate[i]))
@@ -90,6 +97,7 @@ class   dataParser(object):
         self.location_latitude_reg = str(int(location_latitude) // 1800000) + '.' + str(int((location_latitude % 1800000 / 60) * 100))
         self.location_latitude_mint = str(location_latitude % 1800000)
 
+
         for i in range(15, 18 + 1):
             temp1 = str(hex(self.sourceDate[i]))
             temp2 = re.findall('0x([\dA-Fa-f]+)', temp1)
@@ -100,6 +108,12 @@ class   dataParser(object):
         self.location_longitude_reg = str(int(location_longitude) // 1800000) + '.' + str(int((location_longitude % 1800000 / 60) * 100))
         self.location_longitude_mint = str(location_longitude % 1800000)
         self.GpsData = [self.timedata, self.location_latitude_reg, self.location_latitude_mint,self.location_longitude_reg,self.location_longitude_mint]
+
+
+        #todo：通过ip地址查询到imei号
+        #todo：将imei号和gps定位数据进行存储
+
+
         return self.GpsData
 
     def processStatusCmd(self):
@@ -107,6 +121,10 @@ class   dataParser(object):
         for i in range(4, 9):
             Status_code += str(self.sourceDate[i])
         self.Status_code = Status_code
+
+        # todo：通过ip地址查询到imei号
+        # todo：将imei号和状态数据进行存储
+
         return self.Status_code
 
         # 指令号是0x14时的解析
@@ -115,6 +133,9 @@ class   dataParser(object):
     def processSleepCmd(self):
         result = self.get_instruction(self.sourceDate)
         print '设备休眠: ', result
+        # todo：通过ip地址查询到imei号
+        # todo：将imei号和休眠状态进行存储
+
         return None
 
     # 指令是0x17时的解析
@@ -139,7 +160,8 @@ class   dataParser(object):
         print 'MCCMNC: ', MCCMNC
         print 'lac-celid-mciss: ', lac_cellid_mciss
         # 返回结果
-
+        #todo 根据ip地址找到imei号
+        #todo 保存imei，wifi数据和lbs数据
         return self._send_data(result)
 
     # 指令是0x69时的解析
@@ -191,6 +213,8 @@ class   dataParser(object):
             print 'LBS数量: ', LBS_num
             print 'MCCMNC: ', MCCMNC1
             print 'lac-celid-mciss: ', lac_cellid_mciss
+            #todo：根据ip查询imei
+            #todo：保存imei，wifi数据和lbs数据
 
         return self._send_data(result)
 

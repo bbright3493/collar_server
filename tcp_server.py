@@ -12,12 +12,15 @@ import time
 import binascii
 import data_parse
 
+lastip = 0
+
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
     """
     请求处理的handler
     """
 
     def handle(self):
+        global lastip
         print time.ctime(), '...connected from:', self.client_address
         while True:
             data = self.request.recv(config.BUFFER_SIZE)
@@ -32,6 +35,13 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     result = dataParser.parserProcess()
                     print result
                     self.request.sendall('%s' % result)
+                    #todo（test）保存ip和端口号 测试设备ip是否会发生变化
+                    print lastip, self.client_address[0]
+                    if lastip==0 or lastip!=self.client_address[0]:
+                        with open('test.txt', 'a+') as testFile:
+                            testFile.write('收到的ip：')
+                            testFile.write(self.client_address[0])
+                    lastip = self.client_address[0]
                 else:
                     print time.ctime(), self.client_address, 'client: ', data
                     '''analysis = data_tool.Analysis(data)
