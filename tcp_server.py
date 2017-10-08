@@ -11,6 +11,7 @@ import time
 #import data_tool
 import binascii
 import data_parse
+import time
 
 
 
@@ -41,7 +42,11 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     print lastip, self.client_address[0]
                     if lastip==0 or lastip!=self.client_address[0]:
                         with open('test.txt', 'a+') as testFile:
-                            testFile.write('收到的ip：')
+                            cur_time = str(time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+                            if lastip==0:
+                                testFile.write(cur_time + '收到的新ip：')
+                            else:
+                                testFile.write(cur_time + 'ip变成了：')
                             testFile.write(self.client_address[0])
                     lastip = self.client_address[0]
                 else:
