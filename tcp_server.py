@@ -39,6 +39,26 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                     print result
                     self.request.sendall('%s' % result)
                     #todo（test）保存ip和端口号 测试设备ip是否会发生变化
+
+                    if dataParser.cmd==1:
+                        cmdStr = '登录'
+                    elif dataParser.cmd==0x08:
+                        cmdStr = '心跳'
+                    elif dataParser.cmd==0x10:
+                        cmdStr = 'GPS数据'
+                    elif dataParser.cmd==0x13:
+                        cmdStr = '状态'
+                    elif dataParser.cmd==0x17:
+                        cmdStr = '离线wifi'
+                    elif dataParser.cmd==0x69:
+                        cmdStr = '在线wifi'
+
+                    with open('cmd.txt', 'a+') as cmdfile:
+                        cur_time = str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
+                        cmdfile.write(cur_time + ' ip：'+self.client_address[0]+' cmd:'+cmdStr+'******')
+
+
+                    '''
                     print lastip, self.client_address[0]
                     if lastip==0 or lastip!=self.client_address[0]:
                         with open('test.txt', 'a+') as testFile:
@@ -49,6 +69,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                                 testFile.write(cur_time + 'ip变成了：')
                             testFile.write(self.client_address[0])
                     lastip = self.client_address[0]
+                    '''
                 else:
                     print time.ctime(), self.client_address, 'client: ', data
                     '''analysis = data_tool.Analysis(data)
