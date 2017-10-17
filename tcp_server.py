@@ -8,7 +8,7 @@ import SocketServer
 #import mysql_utils
 import config
 import time
-#import data_tool
+import data_tool
 import binascii
 import data_parse
 import time
@@ -34,45 +34,13 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 if 'x'==data[0]:
                     print time.ctime(), self.client_address, 'client: ', binascii.b2a_hex(data)
                     dataArray = bytearray(data)
-                    dataParser = data_parse.dataParser(dataArray)
+                    dataParser = data_parse.dataParser(dataArray, self.client_address[0])
                     result = dataParser.parserProcess()
                     print result
                     self.request.sendall('%s' % result)
-                    #todo（test）保存ip和端口号 测试设备ip是否会发生变化
-
-                    if dataParser.cmd==1:
-                        cmdStr = '登录'
-                    elif dataParser.cmd==0x08:
-                        cmdStr = '心跳'
-                    elif dataParser.cmd==0x10:
-                        cmdStr = 'GPS数据'
-                    elif dataParser.cmd==0x13:
-                        cmdStr = '状态'
-                    elif dataParser.cmd==0x17:
-                        cmdStr = '离线wifi'
-                    elif dataParser.cmd==0x69:
-                        cmdStr = '在线wifi'
-
-                    with open('cmd.txt', 'a+') as cmdfile:
-                        cur_time = str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
-                        cmdfile.write(cur_time + ' ip：'+self.client_address[0]+' cmd:'+cmdStr+'******')
-
-
-                    '''
-                    print lastip, self.client_address[0]
-                    if lastip==0 or lastip!=self.client_address[0]:
-                        with open('test.txt', 'a+') as testFile:
-                            cur_time = str(time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
-                            if lastip==0:
-                                testFile.write(cur_time + '收到的新ip：')
-                            else:
-                                testFile.write(cur_time + 'ip变成了：')
-                            testFile.write(self.client_address[0])
-                    lastip = self.client_address[0]
-                    '''
                 else:
                     print time.ctime(), self.client_address, 'client: ', data
-                    '''analysis = data_tool.Analysis(data)
+                    analysis = data_tool.Analysis(data)
                     # 检查数据格式是否正确, 如果不正确则直接抛弃
                     if not analysis.check():
                         continue
@@ -85,7 +53,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                             result = analysis.location_packets()
                         elif analysis.type == 'B2G':
                             result = analysis.agps_packets()
-                    self.request.sendall('%s' % result)'''
+                    self.request.sendall('%s' % result)
 
 
 

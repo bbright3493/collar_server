@@ -11,10 +11,14 @@ BUFFER_SIZE = 1024
 TIMER_INTERVAL = 5
 # 数据库配置信息
 DB_HOST = '119.23.15.57'
-# DB_HOST = '127.0.0.1'
+#本机测试用
+#DB_HOST = '127.0.0.1'
 DB_PORT = 3306
 DB_USER = 'collar001'
 DB_PASSWD = 'm7V^F@FyIC'
+#本机测试用
+#DB_USER = 'root'
+#DB_PASSWD = ''
 DB_NAME = 'collar'
 DB_CHARSET = 'utf8'
 # 连接最大使用次数

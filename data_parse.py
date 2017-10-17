@@ -1,6 +1,6 @@
 #! usr/bin/python
 #coding=utf-8
-import re
+
 
 '''
 模块名称：
@@ -12,31 +12,31 @@ import re
 修改说明：
 修改时间：
 '''
+from __future__ import division
+import re
+import mysql_utils
+
+
 
 #验证数据合法性   取出指令号  按照指令号调用不同的方法进行解析
-
-
 class   dataParser(object):
-    def __init__(self, data):
+    def __init__(self, data, ip):
         self.sourceDate = data
-        self.login_data = ''
+        self.imei = ''
 
         self.nav = 0
         self.speed = 0
-        self.location_latitude_reg = ''
-        self.location_latitude_mint = ''
-        self.location_longitude_reg = ''
-        self.location_longitude_mint = ''
+
         self.numsatellite = 0
         self.len_data = 0
         self.timedata = '201001010000'
-        self.GpsData = []
-
+        self.ip = ip
         self.Status_code = ''
 
         self.SleepCmd = 0x00 #ycq
 
-
+        # 数据操作对象
+        self.db = mysql_utils.MysqlHelper()
 
     def parserProcess(self):
         #判断数据的合法性
@@ -61,32 +61,84 @@ class   dataParser(object):
             elif self.cmd == 0x69:
                 return self.processLBSCmd()
 
+
     def processLoginCmd(self):
+        '''
+        登录指令
+        解析该指令
+        获取imei
+        判断ip是否有对应的imei
+        没有则存储ip和imei到表ip_imei中
+        返回回复内容
+        '''
         self.login_data_len = self.sourceDate[2]
         for i in range(self.login_data_len - 4):
-            self.login_data += str(self.sourceDate[i + 4])
-        #todo：判断ip地址是否发生变化 变化则重新存储ip
-        #todo：存储imei和ip
+            self.imei += str(self.sourceDate[i + 4])
+
+        #todo:根据imei查询ip
+        # 根据imei查到对应的id和user_id
+        db_ip = self.db.query("SELECT ip FROM collar_collar WHERE imei='%s'" % self.imei)
+
+        device_type = 'N'
+
+        if db_ip==[]:
+            #查询不到则存储imei和ip
+            print 'save imei and ip'
+            sql = "INSERT INTO collar_collar(ip, imei, device_type) VALUES('%s', '%s', '%s')" % (self.ip, self.imei, device_type)
+            self.db.dml(sql)
+        elif db_ip[0]['ip']==self.ip:
+            #同一个设备的ip发生了变化 更新ip
+            sql = "UPDATE collar_collar SET ip='%s' WHERE imei='%s'" % (self.ip, self.imei)
+            self.db.dml(sql)
+        else:
+            #没有变化 不做处理
+            pass
+
         #todo：组装成返回的数据
-        return self.login_data
+        data = bytearray([0x78,0x78,0x01,0x01,0x0d,0x0a])
+        strData = str(data)
+        return strData
 
     def processHeartCmd(self):
-        return self.cmd
+        '''
+        心跳指令
+        可以不做任何处理
+        '''
+        pass
 
     def processGpsCmd(self):
+        '''
+        gps指令
+        获取时间日期
+        获取卫星个数
+        获取并解析经纬度
+        获取并解析速度
+        获取并解析东西经南北纬 状态 航向
+        根据ip地址查询imei号
+        存储imei号 及 gps所有信息
+        返回回复内容
+        '''
         timedata = ''
         location_latitude = ''
         location_longitude = ''
-        temp1 = ''
-        temp2 = ''
-        for i in range(4, 9+1):
-            timedata += str(hex(self.sourceDate[i]))
 
-        #todo：存储时间数据
+        timeLists = self.sourceDate[4:10]
+
+        #gps时间处理
+        for timeList in timeLists:
+            timedata = timedata + str(timeList)
+
         #组装成返回的字段
-        self.timedata = '0x780x780x06x10' + timedata + '0x0d0x0a'
+        retList = [0x78,0x78,0x06,0x10]
+        retList.extend(timeLists)
+        retList.extend([0x0d,0x0a])
+        data = bytearray(retList)
+        strData = str(data)
 
+        #得到gps个数
+        gpsNum = self.sourceDate[10] % 16
 
+        #得到经度
         for i in range(11, 14 + 1):
             temp1 = str(hex(self.sourceDate[i]))
             temp2 = re.findall('0x([\dA-Fa-f]+)', temp1)
@@ -94,10 +146,11 @@ class   dataParser(object):
             location_latitude += temp2
         location_latitude = '0x' + location_latitude
         location_latitude = int(location_latitude, 16)
-        self.location_latitude_reg = str(int(location_latitude) // 1800000) + '.' + str(int((location_latitude % 1800000 / 60) * 100))
-        self.location_latitude_mint = str(location_latitude % 1800000)
 
+        lat = location_latitude / 1800000
+        print lat
 
+        #得到纬度
         for i in range(15, 18 + 1):
             temp1 = str(hex(self.sourceDate[i]))
             temp2 = re.findall('0x([\dA-Fa-f]+)', temp1)
@@ -105,166 +158,228 @@ class   dataParser(object):
             location_longitude += temp2
         location_longitude = '0x' + location_longitude
         location_longitude = int(location_longitude, 16)
-        self.location_longitude_reg = str(int(location_longitude) // 1800000) + '.' + str(int((location_longitude % 1800000 / 60) * 100))
-        self.location_longitude_mint = str(location_longitude % 1800000)
-        self.GpsData = [self.timedata, self.location_latitude_reg, self.location_latitude_mint,self.location_longitude_reg,self.location_longitude_mint]
+        lng = location_longitude / 1800000
+        print lng
+        #得到速度
+        gpsSpeed = self.sourceDate[19]
 
+        #通过ip查询设备id和用户id
+        collar = self.db.query("SELECT id,user_id FROM collar_collar WHERE ip='%s'" % self.ip)
+        if collar:
+            collar_id = collar[0]['id']
+            user_id = collar[0]['user_id']
+            localtype = 'G'
 
-        #todo：通过ip地址查询到imei号
-        #todo：将imei号和gps定位数据进行存储
-
-
-        return self.GpsData
+            print collar_id, user_id
+            # 存储定位数据
+            if user_id==None:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, satellite, lat, lng, speed,
+                        collar_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s', now())
+                """ % (timedata, localtype, gpsNum, lat, lng, gpsSpeed, collar_id)
+            else:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, satellite, lat, lng, speed,
+                        collar_id, user_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s','%s', now())
+                """ % (timedata, localtype, gpsNum, lat, lng, gpsSpeed, collar_id, user_id)
+            self.db.dml(sql)
+        return strData
 
     def processStatusCmd(self):
+        '''
+        状态信息指令
+        解析出电量和上传间隔
+        并进行存储
+        '''
         Status_code = ''
         for i in range(4, 9):
             Status_code += str(self.sourceDate[i])
         self.Status_code = Status_code
 
+        #电池电量
+        batPersent = self.sourceDate[4]
+        #上传间隔
+        timeGap = self.sourceDate[7]
+
+        retList = [0x78,0x78,0x02,0x13,0x03,0x0d,0x0a]
+        data = bytearray(retList)
+        strData = str(data)
+
         # todo：通过ip地址查询到imei号
-        # todo：将imei号和状态数据进行存储
+        # todo：将imei号和电池电量，上传间隔进行存储
+        #通过ip查询设备id和用户id
+        collar = self.db.query("SELECT id,user_id FROM collar_collar WHERE ip='%s'" % self.ip)
+        if collar:
+            collar_id = collar[0]['id']
+            user_id = collar[0]['user_id']
+            localtype = 'S'
+            # 存储定位数据
+            if user_id==None:
+                sql = """
+                        INSERT INTO collar_location(loca_type, bat_persent, upload_time,
+                        collar_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', now())
+                """ % (localtype, batPersent, timeGap, collar_id)
+            else:
+                sql = """
+                        INSERT INTO collar_location(loca_type, bat_persent, upload_time,
+                        collar_id, user_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', now())
+                """ % (localtype, batPersent, timeGap, collar_id, user_id)
+            self.db.dml(sql)
 
-        return self.Status_code
+        return strData
 
-        # 指令号是0x14时的解析
-    # LBS个数：05 为基站数量，基站数量最小为2个
-    # MCCMNC：mcc2byte，mnc1byte 01CC00为46000
+
     def processSleepCmd(self):
-        result = self.get_instruction(self.sourceDate)
-        print '设备休眠: ', result
-        # todo：通过ip地址查询到imei号
-        # todo：将imei号和休眠状态进行存储
+        '''
+        设备通知休眠指令
+        修改设备状态为休眠
+        '''
+        pass
 
-        return None
 
-    # 指令是0x17时的解析
     def processWifiCmd(self):
-        result = self.get_instruction(self.sourceDate)
-        # wifi数量
-        wifi_num = result[4:6]
-        # 日期时间
-        data_time = result[8:20]
-        time = '%s-%s-%s %s:%s:%s' % (data_time[0:2], data_time[2:4], data_time[4:6],
-                                      data_time[6:8], data_time[8:10], data_time[10:12])
-        # LBS数量
-        LBS_num = result[20:22]
-        # MCCMNC
-        MCCMNC = int(str(result[22:28]).replace('00',''),16)
-        # lac celid msciss
-        LBS_data = result[28:-4]
-        lac_cellid_mciss = self.lbs_lac(LBS_data)
+        '''
+        0x17 离线wifi指令
+        解析出wifi数量 数据日期 lbs数量 wifi数量 mcc mnc lac cellid msciss
+        '''
+
+        wifiData = []
+        lbsData = []
+        timedata = ''
+
+        wifi_num = self.sourceDate[2]
+
+        timeLists = self.sourceDate[4:10]
+
+        for timeList in timeLists:
+            timeList = hex(timeList)#转换成16进制显示
+            timeList = str(timeList)#转换成字符
+            timeList = timeList[2:4]
+            timedata = timedata + str(timeList)
+
+
+        retList = [0x78,0x78,0x00,0x69]
+        retList.extend(timeLists)
+        retList.extend([0x0d,0x0a])
+        data = bytearray(retList)
+        strData = str(data)
+
+        if wifi_num>0:
+            for i in range(0, 7*wifi_num):
+                wifiData.append(self.sourceDate[10+i])
+
         print 'wifi数量: ', wifi_num
-        print '日期时间: ', time
-        print 'LBS数量: ', LBS_num
-        print 'MCCMNC: ', MCCMNC
-        print 'lac-celid-mciss: ', lac_cellid_mciss
+        print 'wifidata: ', wifiData
+
+        if self.sourceDate[10+7*wifi_num]!=0x0d:
+            lbs_num = self.sourceDate[10+7*wifi_num]
+            print 'LBS数量: ', lbs_num
+            lbs_start = 11+7*wifi_num
+            for j in range(0, 3+5*lbs_num):
+                lbsData.append(self.sourceDate[lbs_start+j])
+
+        print '日期时间: ', timedata
+        print 'lbsdaa ', lbsData
         # 返回结果
-        #todo 根据ip地址找到imei号
-        #todo 保存imei，wifi数据和lbs数据
-        return self._send_data(result)
+
+        #通过ip查询设备id和用户id
+        collar = self.db.query("SELECT id,user_id FROM collar_collar WHERE ip='%s'" % self.ip)
+        #对数据进行存储
+        if collar:
+            collar_id = collar[0]['id']
+            user_id = collar[0]['user_id']
+            localtype = 'F'
+            print collar_id, user_id
+            # 存储定位数据
+            if user_id==None:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, wifi_num,
+                        wifi_data, lbs_num, lbs_data, collar_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s', now())
+                """ % (timedata, localtype, wifi_num, wifiData, lbs_num, lbsData, collar_id)
+            else:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, wifi_num,
+                        wifi_data, lbs_num, lbs_data, collar_id, user_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s', '%s', now())
+                """ % (timedata, localtype, wifi_num, wifiData, lbs_num, lbsData, collar_id, user_id)
+            self.db.dml(sql)
+
+        return strData
 
     # 指令是0x69时的解析
     def processLBSCmd(self):
-        result = self.get_instruction(self.sourceDate)
-        # wifi数量
-        wifi_num = result[4:6]
-        # 日期时间
-        data_time = result[8:20]
-        time = '%s-%s-%s %s:%s:%s' % (data_time[0:2], data_time[2:4], data_time[4:6],
-                                      data_time[6:8], data_time[8:10], data_time[10:12])
-        # wifi数据
-        wifi_bssid_rssi = {} # wifi数据信息
-        if wifi_num != '00':
-            result1 = result
-            wifi_data = result1[20:(20+14*int(wifi_num))]
-            # 获取wifi信号组
-            i = 0
-            data_list = []
-            while i < len(wifi_data):
-                data_list.append(wifi_data[i:i+14])
-                i += 14
-                # wifi信号解析
-            for i in data_list:
-                i1 = '0x'+ i[0:2] + ':0x' + i[2:4] + ':0x' + i[4:6] + ':0x' + i[6:8] + ':0x' + i[8:10] + ':0x' + i[10:12] + ':0x' + i[12:14]
-                wifi_bssid_rssi[i1[0:29]] = i1[30:]
-                # LBS个数
-            LBS_num = result1[(20+14*int(wifi_num)):(22+14*int(wifi_num))]
-            # MCCMNC
-            MCCMNC1 = result1[(22+14*int(wifi_num)):(26+14*int(wifi_num))]
-            MCCMNC = int(MCCMNC1, 16)
-            # lac_cellid_mciss
-            LBS_data = result1[(28+14*int(wifi_num)):-4]
-            lac_cellid_mciss = self.lbs_lac(LBS_data)
-        else:
-            result1 = result
-            # wifi信号
-            wifi_bssid_rssi = {}
-            # LBS个数
-            LBS_num = result1[20:22]
-            # MCCMNC
-            MCCMNC1 = int(str(result[22:28]).replace('00',''),16)
-            # lac_cellid_mciss
-            LBS_data = result[28:-4]
-            lac_cellid_mciss = self.lbs_lac(LBS_data)
-            print 'wifi数量: ', wifi_num
-            print 'wifi数据：', wifi_bssid_rssi
-            print '日期时间: ', time
-            print 'LBS数量: ', LBS_num
-            print 'MCCMNC: ', MCCMNC1
-            print 'lac-celid-mciss: ', lac_cellid_mciss
-            #todo：根据ip查询imei
-            #todo：保存imei，wifi数据和lbs数据
+        '''
+        0x17 离线wifi指令
+        解析出wifi数量 数据日期 lbs数量 wifi数量 mcc mnc lac cellid msciss
+        '''
 
-        return self._send_data(result)
+        wifiData = []
+        lbsData = []
+        timedata = ''
 
+        wifi_num = self.sourceDate[2]
 
-    @staticmethod
-    def dec2hex(string_num):
+        timeLists = self.sourceDate[4:10]
+        #数据时间处理
+        for timeList in timeLists:
+            timeList = hex(timeList)#转换成16进制显示
+            timeList = str(timeList)#转换成字符
+            timeList = timeList[2:4]
+            timedata = timedata + str(timeList)
 
-        """
-        十进制转十六进制
-        :return:
-        """
+        retList = [0x78,0x78,0x00,0x69]
+        retList.extend(timeLists)
+        retList.extend([0x0d,0x0a])
+        data = bytearray(retList)
+        strData = str(data)
 
-        base = [str(x) for x in range(10)] + [chr(x) for x in range(ord('A'), ord('A') + 6)]
-        num = int(string_num)
-        mid = []
-        while True:
-            if num == 0: break
-            num, rem = divmod(num, 16)
-            mid.append(base[rem])
-        mid = mid + ['0'] * (4 - len(mid)) if len(mid) < 4 else mid
-        return ''.join([str(x) for x in mid[::-1]])
+        if wifi_num>0:
+            for i in range(0, 7*wifi_num):
+                wifiData.append(self.sourceDate[10+i])
 
-    # 将指令转换为7878...格式
-    def get_instruction(self, content):
-        list = []
-        for i in self.sourceDate:
-            demo = self.dec2hex(str(i))
-            demo = re.match('00(.*)', demo)
-            list.append(demo.group(1))
-        result = ''.join(list)
-        return result
+        print 'wifi数量: ', wifi_num
+        print 'wifidata: ', wifiData
 
+        if self.sourceDate[10+7*wifi_num]!=0x0d:
+            lbs_num = self.sourceDate[10+7*wifi_num]
+            print 'LBS数量: ', lbs_num
+            lbs_start = 11+7*wifi_num
+            for j in range(0, 3+5*lbs_num):
+                lbsData.append(self.sourceDate[lbs_start+j])
 
-    # 返回的指令，格式为 7878+0x+协议号+时间+结尾2byte，格式为字符串
-    def _send_data(self, content):
-        result = content[0:20] + content[-4:]
-        return result
+        print '日期时间: ', timedata
+        print 'lbsdaa ', lbsData
+        # 返回结果
 
-    # 转换lac_ss格式
-    def lbs_lac(self,LBS_data):
-        i = 0
-        LBS_data_list = []
-        lac_cellid_mciss = {}
-        while i < len(LBS_data):
-            LBS_data_list.append(LBS_data[i:i + 10])
-            i += 10
-        j = 0
-        for data in LBS_data_list:
-            lac_cellid_mciss[j+1] = '%s_%s_%s' % (int(str(data[0:4]), 16),
-                                                  int(str(data[4:8]), 16),
-                                                  int(str(data[8:10]), 16))
-            j += 1
-        return lac_cellid_mciss
+        #通过ip查询设备id和用户id
+        collar = self.db.query("SELECT id,user_id FROM collar_collar WHERE ip='%s'" % self.ip)
+        #对数据进行存储
+        if collar:
+            collar_id = collar[0]['id']
+            user_id = collar[0]['user_id']
+            localtype = 'O'
+
+            # 存储定位数据
+
+            if user_id==None:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, wifi_num,
+                        wifi_data, lbs_num, lbs_data, collar_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s', now())
+                """ % (timedata, localtype, wifi_num, wifiData, lbs_num, lbsData, collar_id)
+            else:
+                sql = """
+                        INSERT INTO collar_location(gps_time, loca_type, wifi_num,
+                        wifi_data, lbs_num, lbs_data, collar_id, user_id, add_time) VALUES('%s', '%s',
+                        '%s', '%s', '%s', '%s', '%s', '%s', now())
+                """ % (timedata, localtype, wifi_num, wifiData, lbs_num, lbsData, collar_id, user_id)
+
+            self.db.dml(sql)
+
+        return strData
+
